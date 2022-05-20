@@ -1,0 +1,168 @@
+// MARK: - AutoObjectDiff
+import Foundation
+{% for type in types.based.AutoObjectDiff|annotated:"AutoImport" %}
+{% for value in type.annotations.AutoImport|toArray %}
+import {{ value }}
+{% endfor %}
+{% endfor %}
+
+{% macro setupCompare %}
+// swiftlint:disable file_length
+fileprivate func compareOptionals<T>(lhs: T?, rhs: T?, compare: (_ lhs: T, _ rhs: T) -> Bool) -> Bool {
+    switch (lhs, rhs) {
+    case let (lValue?, rValue?):
+        return compare(lValue, rValue)
+    case (nil, nil):
+        return true
+    default:
+        return false
+    }
+}
+
+fileprivate func compareArrays<T>(lhs: [T], rhs: [T], compare: (_ lhs: T, _ rhs: T) -> Bool) -> Bool {
+    if lhs.isEmpty || rhs.isEmpty { return lhs.isEmpty == rhs.isEmpty }
+
+    guard lhs.count == rhs.count else { return false }
+    for (idx, lhsItem) in lhs.enumerated() {
+        guard compare(lhsItem, rhs[idx]) else { return false }
+    }
+
+    return true
+}
+{% endmacro %}
+
+{% call setupCompare %}
+
+public protocol DictionaryElementRepresentable {
+    var key: String { get }
+    var value: Any? { get }
+}
+
+extension Array where Element: DictionaryElementRepresentable {
+    public func dictionaryRepresentation() -> [String: Any?] {
+        var dict = [String: Any?]()
+        self.forEach { dict[$0.key] = $0.value }
+        return dict
+    }
+}
+
+{% macro compareVariables variables %}{% typed variables as [Variable] %}
+        {% for variable in variables|!annotated:"skipObjectDiff" where variable.readAccess != "private" and variable.readAccess != "fileprivate" and ( variable.isMutable or variable.defaultValue == nil )  %}{% if not variable.annotations.skipUpdatesEquality %}if {% if not variable.isOptional %}{% if not variable.annotations.arrayUpdatesEquality %}{{ variable.name }} != _model.{{ variable.name }}{% else %}compareArrays(lhs: {{ variable.name }}, rhs: _model.{{ variable.name }}, compare: ==) == false{% endif %}{% else %}compareOptionals(lhs: {{ variable.name }}, rhs: _model.{{ variable.name }}, compare: ==) == false{% endif %} { updates.append(.{{variable.name}}({{variable.name}})) }{% endif %}
+        {% endfor %}
+{% endmacro %}
+
+{% for type in types.implementing.AutoObjectDiff %}
+{% if type.annotations.fileGenerationPath %}
+// sourcery:file:{{ type.annotations.fileGenerationPath }}/{{ type.name}}+AutoObjectDiff
+{% if type.annotations.AutoImport %}
+{% for value in type.annotations.AutoImport|toArray %}
+import {{ value }}
+{% endfor %}
+{% endif %}
+{% call setupCompare %}
+
+{% endif %}
+// MARK: {{type.name}} ObjectDiff
+{{ type.accessLevel }} extension {{type.name}} {
+
+    enum Updates: DictionaryElementRepresentable {
+        {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil )  %}
+        case {{var.name}}({{var.typeName}})
+        {% endfor %}
+        {{ type.accessLevel }} var key: String {
+            switch self {
+            {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil )  %}
+                case .{{var.name}}: return "{{var.name}}"
+            {% endfor %}
+            }
+        }
+        {{ type.accessLevel }} var keyPath: PartialKeyPath<{{ type.name }}> {
+            switch self {
+            {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil )  %}
+                case .{{var.name}}: return \.{{var.name}}
+            {% endfor %}
+            }
+        }
+        {{ type.accessLevel }} var value: Any? {
+            switch self {
+            {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil )  %}
+            case .{{var.name}}(let newValue): return newValue
+            {% endfor %}
+            }
+        }
+    }
+    
+    static func updatesDict(_ _updates: [Updates]) -> [String: Any?] {
+        var dict = [String: Any?]()
+        _updates.forEach { dict[$0.key] = $0.value }
+        return dict
+    }
+    
+    func allUpdates() -> [Updates] {
+        var updates = [Updates]()
+        
+        {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil ) %}
+        updates.append(.{{var.name}}({{var.name}}))
+        {% endfor %}
+        
+        return updates
+    }
+    
+    {% if type.annotations.CoreDataMogenerator %}
+    func updated(_ _updates: [String: Any?) -> {{type.name}} {
+        _updates.forEach {
+            key, value in
+            self.setValue(value, forKey: key)
+        }
+        return self
+    }
+    
+    func updated(_ _update: Updates) -> {{type.name}} {
+        switch _update {
+            {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil ) %}
+            case .{{var.name}}(let newValue):
+                self.{{var.name}} = newValue
+                return self
+            {% endfor %}
+        }
+    }
+    {% else %}
+    func updated(_ _update: Updates) -> {{type.name}} {
+        switch _update {
+            {% for var in type.storedVariables|!annotated:"skipObjectDiff" where var.readAccess != "private" and var.readAccess != "fileprivate" and ( var.isMutable or var.defaultValue == nil ) %}
+            case .{{var.name}}(let newValue):
+                return {{type.name}}.{{var.name}}Lens.set(newValue, self)
+            {% endfor %}
+        }
+    }
+    {% endif %}
+    func updated(_ _updates: [Updates]) -> {{type.name}} {
+        return _updates.reduce(self) { (value, update) in value.updated(update) }
+    }
+    {% if not type.annotations.skipDifference %}
+    func difference(from _model: {{type.name}}) -> [Updates] {
+        var updates = [Updates]()
+        
+        {% call compareVariables type.storedVariables %}
+        
+        return updates
+    }
+    {% endif %}
+    {% if type.implements.DatabaseMappable %}
+    func allRelationships() -> [DatabaseRelationshipUpdate] {
+        var relationships = [DatabaseRelationshipUpdate]()
+        
+        {% for var in type.storedVariables %}{% if var.type.implements.DatabaseRelationshipMappable %}
+        relationships.append(.toOne(key: "{{var.name}}", object: {{var.name}}, createNew: true))
+        {% endif %}{% endfor %}
+        {% for var in type.storedVariables %}{% if var.typeName.array.elementType.implements.DatabaseRelationshipMappable %}
+        relationships.append(.toManySet(key: "{{var.name}}", objects: {{var.name}}, createNew: true))
+        {% endif %}{% endfor %}
+        return relationships
+    }
+    {% endif %}
+}
+{% if type.annotations.fileGenerationPath %}
+// sourcery:end
+{% endif %}
+{% endfor %}

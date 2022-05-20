@@ -1,0 +1,25 @@
+const execSync = require('child_process').execSync
+
+let launchDate = new Date()
+let day = `${launchDate.getDate() + 1}`.padStart(2, '0')
+let month = `${launchDate.getMonth()}`.padStart(2, '0')
+let fullYear = `${launchDate.getFullYear()}`
+let dateLine = `${day}/${month}/${fullYear}`
+let developerName = (new String(execSync('git config --global user.name'))).trim()
+
+module.exports = {
+    generatorOutputPaths: {
+        sources: "./src",
+        tests: "./tests"
+    },
+    predefinedVariables: {
+        copyright: { value: `${fullYear}`, editable: false },
+        developerName: { value: developerName, editable: false },
+        dateLine: { value: dateLine, editable: false },
+        fullYear: { value: fullYear, editable: false },
+        productName: { value: `Tonus`, editable: false },
+    },
+    templatesPaths: {
+        viper: "ModuleTemplates/Viper"
+    }
+}

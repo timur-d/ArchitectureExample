@@ -1,0 +1,14 @@
+// MARK: - AutoInitializable
+import Foundation
+{% for type in types.implementing.AutoInitializable %}
+// sourcery:inline:{{ type.name }}.AutoInitializable
+// MARK: {{type.name}} Initialization
+{{ type.accessLevel }} init(
+    {% for var in type.storedVariables|!annotated:"skipInit" %}{{var.name}}: {{var.typeName}}{% if var.annotations.defaultValue %} = {{var.annotations.defaultValue}}{% endif %}{% if var.isOptional %} = nil{% endif %}{% if not forloop.last %},
+    {% endif %}{% endfor %}) {
+    {% for var in type.storedVariables|!annotated:"skipInit" %}
+    self.{{var.name}} = {{var.name}}
+    {% endfor %}
+}
+// sourcery:end
+{% endfor %}

@@ -1,0 +1,481 @@
+// MARK: - AutoInjectable
+import Foundation
+<%_
+var importedLibraries = Set<String>()
+var viewControllersTypeByName = [String: Type]()
+var protocolsByName = [String: Type]()
+
+for proto in types.protocols {
+    protocolsByName[proto.name] = proto
+}
+
+for type in types.all { 
+    if type.name.hasSuffix("ViewController") {
+        if let injectionExportType = type.annotations["injectionExportType"] as? String {
+            viewControllersTypeByName[type.name] = protocolsByName[injectionExportType]
+        } else {
+            viewControllersTypeByName[type.name] = type
+        }
+    }
+
+    if let value = type.annotations["AutoImport"] {
+        if let array = value as? [String] {
+            array.forEach { item in
+                if importedLibraries.contains(item) { return }
+                importedLibraries.insert(item)
+-%>
+import <%= item %>
+<%_
+            }
+        } else if let item = value as? String {
+            if importedLibraries.contains(item) { continue }
+            importedLibraries.insert(item)
+-%>
+import <%= item %>
+<%_     } 
+    } 
+} -%>
+
+
+// swiftlint:disable force_unwrapping
+
+<%_
+var services = [Type]()
+var servicesProtocols = [String]()
+var coordinators = [Type]()
+var coordinatorsProtocols = [String]()
+var coordinatorNameToParametersWithDefaultsString = [String: String]()
+var coordinatorNameToParametersString = [String: String]()
+var modules = [Type]()
+var modulesNames = [String]()
+var factories = [Type]()
+-%>
+<%_
+for type in types.all {
+    if type.implements["AutoInjectableService"] != nil {
+        services.append(type)
+        if let serviceProtocol = type.annotations["AutoInjectableServiceProtocol"] as? String { 
+            servicesProtocols.append(serviceProtocol) 
+        } else if let serviceProtocols = type.annotations["AutoInjectableServiceProtocol"] as? [String] { 
+            servicesProtocols.append(contentsOf: serviceProtocols) 
+        }
+    }
+
+    if type.implements["AutoInjectableCoordinator"] != nil {
+        coordinators.append(type)
+        if let annotationProtocol = type.annotations["AutoInjectableCoordinatorProtocol"] as? String { 
+            coordinatorsProtocols.append(annotationProtocol) 
+        } else if let annotationProtocols = type.annotations["AutoInjectableCoordinatorProtocol"] as? [String] { 
+            coordinatorsProtocols.append(contentsOf: annotationProtocols) 
+        }
+    }
+
+    if type.implements["AutoInjectableModule"] != nil {
+        modules.append(type)
+        let moduleName = type.name.replacingOccurrences(of: "Configurator", with: "")
+        modulesNames.append(moduleName + "Module")
+        let viewControllerType: Type = viewControllersTypeByName["\(moduleName)ViewController"]!
+        let viewExportedName: String = viewControllerType.kind == "protocol" ? viewControllerType.name : viewControllerType.inheritedTypes.first ?? viewControllerType.name
+-%>
+typealias <%= moduleName %>Module = (view: <%=viewExportedName%>, input: <%= moduleName %>ModuleInput)
+<%_ }
+} //  for type in types.all
+for type in types.protocols {
+    if type.implements["AutoFactoryImplementation"] != nil {
+        factories.append(type)
+    }
+}
+-%>
+
+
+// MARK: - AutoInject
+class AutoInject {
+
+    // MARK: - Services registration
+    <%_ for type in services { -%>
+      <%_ 
+      let injectedProtocols: [String]
+      if let serviceProtocol = type.annotations["AutoInjectableServiceProtocol"] as? String {
+        injectedProtocols = [serviceProtocol]
+      } else if let serviceProtocols = type.annotations["AutoInjectableServiceProtocol"] as? [String] {
+        injectedProtocols = serviceProtocols
+      } else {
+        injectedProtocols = [type.name]
+      }
+
+      -%>
+    static let <%= type.name.prefix(1).lowercased() + type.name.dropFirst() %> = <%-%>
+        <%_ if let value = type.annotations["AutoInjectableValue"] { -%>
+<%= value %>
+        <%_ } else if let initializer = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.initializers.first(where: {$0.parameters.isEmpty == false}) { -%>
+        <%_
+        var resolved = [MethodParameter]()
+        var resolvedImplementations = [String: String]()
+        let params = initializer.parameters.filter({
+            let isModule = modulesNames.contains($0.typeName.name)
+            let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+            guard let paramType = $0.type else {
+                if isModule || isServiceProtocol { resolved.append($0) }
+                return !isModule && !isServiceProtocol
+            }
+
+            let isService = paramType.implements["AutoInjectableService"] != nil
+
+            if isModule || isService || isServiceProtocol { resolved.append($0) }
+
+            return !isModule && !isService && !isServiceProtocol
+        })
+        -%>
+<%= type.name %>(<%_ for param in initializer.parameters { -%><%= param.argumentLabel ?? param.name %>: <% if resolved.contains(param){ -%><%= "get" + param.typeName.name + "()" %><%_ } else { -%><%= param.argumentLabel ?? param.name %><%_ } -%><% if initializer.parameters.index(of: param) == initializer.parameters.count - 1 { %><% } else { %>, <% } %><% } -%>)
+        <%_ } else { -%>
+<%= type.name %>()
+        <%_ } -%>
+    <%_ } -%>
+
+
+    // MARK: - Services
+    <%_ for type in services { 
+      
+      let injectedProtocols: [String]
+      if let serviceProtocol = type.annotations["AutoInjectableServiceProtocol"] as? String {
+        injectedProtocols = [serviceProtocol]
+      } else if let serviceProtocols = type.annotations["AutoInjectableServiceProtocol"] as? [String] {
+        injectedProtocols = serviceProtocols
+      } else {
+        injectedProtocols = [type.name]
+      }
+      
+      
+      for injectedProtocol in injectedProtocols {
+      -%>
+    class func get<%= injectedProtocol %>() -> <%= injectedProtocol %> {
+    <%_ if let weakInjection = type.methods.first(where: {$0.callName == "injectWeakServices"}) { -%>
+        <%_
+        var resolved = [MethodParameter]()
+        let params = weakInjection.parameters.filter({
+            let isModule = modulesNames.contains($0.typeName.name)
+            let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+            guard let paramType = $0.type else {
+                if isModule || isServiceProtocol { resolved.append($0) }
+                return !isModule && !isServiceProtocol
+            }
+
+            let isService = paramType.implements["AutoInjectableService"] != nil
+
+            if isModule || isService || isServiceProtocol { resolved.append($0) }
+
+            return !isModule && !isService && !isServiceProtocol
+        })
+        -%>
+        let value = <%= type.name.prefix(1).lowercased() + type.name.dropFirst() %>
+        DispatchQueue.main.async {
+            value.injectWeakServices(<%_ for param in weakInjection.parameters { -%><%= param.argumentLabel ?? param.name %>: <% if resolved.contains(param){ -%><%= "get" + param.typeName.name + "()" %><%_ } else { -%><%= param.argumentLabel ?? param.name %><%_ } -%><% if weakInjection.parameters.index(of: param) == weakInjection.parameters.count - 1 { %><% } else { %>, <% } %><% } -%>)
+        }
+        return value
+    <%_ } else { -%>
+        <%= type.name.prefix(1).lowercased() + type.name.dropFirst() %>
+    <%_ } -%>
+    }
+    <%_ } -%>
+    <%_ } -%>
+
+
+    // MARK: - Modules
+    <%_ for type in modules { -%>
+    <%_ let moduleName = type.name.replacingOccurrences(of: "Configurator", with: "") -%>
+    <%_ if let configure = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.methods.first(where: {$0.callName == "configure" && $0.parameters.first(where: {p in p.defaultValue != "nil"}) != nil}) { -%>
+        <%_ var resolved = [MethodParameter]()
+            let params = configure.parameters.filter({
+                let isModule = modulesNames.contains($0.typeName.name)
+                let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+                guard let paramType = $0.type else {
+                    if isModule || isServiceProtocol { resolved.append($0) }
+                    return !isModule && !isServiceProtocol
+                }
+
+                let isService = paramType.implements["AutoInjectableService"] != nil
+
+                if isModule || isService || isServiceProtocol { resolved.append($0) }
+
+                return !isModule && !isService && !isServiceProtocol
+            })
+        -%>
+    class func get<%= moduleName %>Module(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.typeName %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>) -> <%= moduleName %>Module {
+        <%_ if let configure = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.methods.first(where: {$0.callName == "configure" && $0.parameters.first(where: {p in p.defaultValue != "nil"}) != nil}) { -%>
+        <%_
+        var resolved = [MethodParameter]()
+        let params = configure.parameters.filter({
+            let isModule = modulesNames.contains($0.typeName.name)
+            let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+            guard let paramType = $0.type else {
+                if isModule || isServiceProtocol { resolved.append($0) }
+                return !isModule && !isServiceProtocol
+            }
+
+            let isService = paramType.implements["AutoInjectableService"] != nil
+
+            if isModule || isService || isServiceProtocol { resolved.append($0) }
+
+            return !isModule && !isService && !isServiceProtocol
+        })
+        -%>
+        <%= type.name %>.configure(<%_ for (index, param) in configure.parameters.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <% if resolved.contains(param) { -%>get<%= param.typeName %>()<%_ } else { -%><%= param.argumentLabel ?? param.name %><%_ } -%><% if index == configure.parameters.count - 1 { %><% } else { %>, <% } %><% } -%>)
+        <%_ } else { -%>
+        <%= type.name %>.configure()
+        <%_ } -%>
+    }
+    <%_ } else { -%>
+    class func get<%= moduleName %>Module() -> <%= moduleName %>Module {
+        <%= type.name %>.configure()
+    }
+    <%_ } -%>
+    <%_ } -%>
+
+
+    // MARK: - Coordinator's
+    <%_ for type in coordinators {
+      let injectedProtocols: [String]
+      if let coordinatorProtocol = type.annotations["AutoInjectableCoordinatorProtocol"] as? String {
+        injectedProtocols = [coordinatorProtocol]
+      } else if let coordinatorProtocols = type.annotations["AutoInjectableCoordinatorProtocol"] as? [String] {
+        injectedProtocols = coordinatorProtocols
+      } else {
+        injectedProtocols = [type.name]
+      }
+
+      let returnType: String? = type.annotations["AutoInjectableResolveType"] as? String
+
+
+      for injectedProtocol in injectedProtocols {
+          let getterReturnType = returnType ?? injectedProtocol
+      -%>
+    <%_ if let initializer = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.initializers.first(where: {$0.parameters.isEmpty == false}) { -%>
+        <%_ var resolved = [MethodParameter]()
+            let params = initializer.parameters.filter({
+                let isModule = modulesNames.contains($0.typeName.name)
+                let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+                let isCoordinatorProtocol = coordinatorsProtocols.contains($0.typeName.name)
+                guard let paramType = $0.type else {
+                    if isModule || isServiceProtocol || isCoordinatorProtocol { resolved.append($0) }
+                    return !isModule && !isServiceProtocol && !isCoordinatorProtocol
+                }
+
+                let isService = paramType.implements["AutoInjectableService"] != nil
+
+                if isModule || isService || isServiceProtocol || isCoordinatorProtocol { resolved.append($0) }
+
+                return !isModule && !isService && !isServiceProtocol && !isCoordinatorProtocol
+            })
+
+            coordinatorNameToParametersWithDefaultsString[type.name] = params
+                .map { param -> String in 
+                    let mainPart = "\(param.argumentLabel ?? param.name): \(param.typeName)"
+                    let defaultPart: String
+                    if let defaultValue = param.defaultValue {
+                        defaultPart = " = \(defaultValue)"
+                    } else { 
+                        defaultPart = ""
+                    }
+                    
+                    return "\(mainPart)\(defaultPart)"
+                }
+                .joined(separator: ", ")
+                
+            coordinatorNameToParametersString[type.name] = params
+                .map { "\($0.argumentLabel ?? $0.name): \($0.typeName)" }
+                .joined(separator: ", ")
+
+        -%>
+    class func get<%= injectedProtocol %>(<%=coordinatorNameToParametersWithDefaultsString[type.name] ?? ""%>) -> <%= getterReturnType %> {
+        <%_ if let value = type.annotations["AutoInjectableValue"] { -%>
+        <%= value %>
+        <%_ } else if let initializer = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.initializers.first(where: {$0.parameters.isEmpty == false}) { -%>
+        <%_
+        var resolved = [MethodParameter]()
+        let params = initializer.parameters.filter({
+            let isModule = modulesNames.contains($0.typeName.name)
+            let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+            let isCoordinatorProtocol = coordinatorsProtocols.contains($0.typeName.name)
+            guard let paramType = $0.type else {
+                if isModule || isServiceProtocol || isCoordinatorProtocol { resolved.append($0) }
+                return !isModule && !isServiceProtocol && !isCoordinatorProtocol
+            }
+
+            let isService = paramType.implements["AutoInjectableService"] != nil
+
+            if isModule || isService || isServiceProtocol || isCoordinatorProtocol { resolved.append($0) }
+
+            return !isModule && !isService && !isServiceProtocol && !isCoordinatorProtocol
+        })
+        -%>
+        <%= type.name %>(<%_ for param in initializer.parameters { -%><%= param.argumentLabel ?? param.name %>: <% if resolved.contains(param){ -%>get<%= param.typeName %>()<%_ } else { -%><%= param.argumentLabel ?? param.name %><%_ } -%><% if initializer.parameters.index(of: param) == initializer.parameters.count - 1 { %><% } else { %>, <% } %><% } -%>)
+        <%_ } else { -%>
+        <%= type.name %>()
+        <%_ } -%>
+    }
+    <%_ } else { -%>
+    class func get<%= injectedProtocol %>() -> <%= getterReturnType %> {
+        <%= type.name %>()
+    }
+    <%_ } -%>
+    <%_ } -%>
+    <%_ } -%>
+}
+
+
+// MARK: - Factory methods
+// MARK: - Protocols for coordinator providers
+<%_ for type in coordinators {
+    let injectedProtocols: [String]
+    if let coordinatorProtocol = type.annotations["AutoInjectableCoordinatorProtocol"] as? String {
+        injectedProtocols = [coordinatorProtocol]
+    } else if let coordinatorProtocols = type.annotations["AutoInjectableCoordinatorProtocol"] as? [String] {
+        injectedProtocols = coordinatorProtocols
+    } else {
+        injectedProtocols = [type.name]
+    }
+
+    let returnType: String? = type.annotations["AutoInjectableResolveType"] as? String
+
+    for injectedProtocol in injectedProtocols {
+        let getterReturnType = returnType ?? injectedProtocol
+        let protocolName = "\(injectedProtocol)Provider"
+        if let initializer = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.initializers.first(where: {$0.parameters.isEmpty == false}) { -%>
+            <%_ var resolved = [MethodParameter]()
+                var defaultValueExist = false
+                let params = initializer.parameters.filter({
+
+                    defaultValueExist = defaultValueExist || ($0.defaultValue != nil)
+
+                    let isModule = modulesNames.contains($0.typeName.name)
+                    let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+                    let isCoordinatorProtocol = coordinatorsProtocols.contains($0.typeName.name)
+                    guard let paramType = $0.type else {
+                        if isModule || isServiceProtocol || isCoordinatorProtocol { resolved.append($0) }
+                        return !isModule && !isServiceProtocol && !isCoordinatorProtocol
+                    }
+
+                    let isService = paramType.implements["AutoInjectableService"] != nil
+
+                    if isModule || isService || isServiceProtocol || isCoordinatorProtocol { resolved.append($0) }
+
+                    return !isModule && !isService && !isServiceProtocol && !isCoordinatorProtocol
+                }) %>
+protocol <%= protocolName %> {
+    func create<%= injectedProtocol %>(<%= coordinatorNameToParametersString[type.name] ?? "" %>) -> <%= getterReturnType %>
+}
+extension <%= protocolName %> {
+    @inline(__always)
+    func create<%= injectedProtocol %>(<%= coordinatorNameToParametersString[type.name] ?? "" %>) -> <%= getterReturnType %> {
+        AutoInject.get<%= injectedProtocol %>(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.argumentLabel ?? param.name %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>)
+    }
+    @inline(__always)
+    func get<%= injectedProtocol %>(<%= coordinatorNameToParametersWithDefaultsString[type.name] ?? "" %>) -> <%= getterReturnType %> {
+        create<%= injectedProtocol %>(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.argumentLabel ?? param.name %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>)
+    }
+}
+<%_ } else { -%>
+protocol <%= protocolName %> {
+    func create<%= injectedProtocol %>() -> <%= getterReturnType %>
+}
+extension <%= protocolName %> {
+    @inline(__always)
+    func create<%= injectedProtocol %>() -> <%= getterReturnType %> {
+        AutoInject.get<%= injectedProtocol %>()
+    }
+    @inline(__always)
+    func get<%= injectedProtocol %>() -> <%= getterReturnType %> {
+        create<%= injectedProtocol %>()
+    }
+}<%_     } // let initializer == nil
+    } // for injectedProtocol in injectedProtocols: end
+} // for type in coordinators: end
+%>
+
+// MARK: - Protocols for modules providers
+<%_ for type in modules {
+    let initParameters: [MethodParameter]?
+    let functionParametersWithDefaultsString: String
+    let moduleName = type.name.replacingOccurrences(of: "Configurator", with: "")
+    var defaultValueExist = false
+
+    if let configure = type.methods.first(where: {$0.annotations["AutoInjectableInitializer"] != nil}) ?? type.methods.first(where: {$0.callName == "configure" && $0.parameters.first(where: {p in p.defaultValue != "nil"}) != nil}) {
+            initParameters = configure.parameters.filter({
+                let isModule = modulesNames.contains($0.typeName.name)
+                let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+                guard let paramType = $0.type else {
+                    return !isModule && !isServiceProtocol
+                }
+
+                let isService = paramType.implements["AutoInjectableService"] != nil
+                defaultValueExist = defaultValueExist || ($0.defaultValue != nil)
+
+                return !isModule && !isService && !isServiceProtocol
+            })
+
+            functionParametersWithDefaultsString = configure
+                .parameters
+                .lazy
+                .filter({
+                    let isModule = modulesNames.contains($0.typeName.name)
+                    let isServiceProtocol = servicesProtocols.contains($0.typeName.name)
+                    let isCoordinatorProtocol = coordinatorsProtocols.contains($0.typeName.name)
+                    guard let paramType = $0.type else {
+                        return !isModule && !isServiceProtocol && !isCoordinatorProtocol
+                    }
+
+                    let isService = paramType.implements["AutoInjectableService"] != nil
+
+                    return !isModule && !isService && !isServiceProtocol && !isCoordinatorProtocol
+                })
+                .map { param -> String in
+                    let mainPart = "\(param.argumentLabel ?? param.name): \(param.typeName)"
+                    let defaultPart: String
+                    if let defaultValue = param.defaultValue {
+                        defaultPart = " = \(defaultValue)"
+                    } else {
+                        defaultPart = ""
+                    }
+
+                    return "\(mainPart)\(defaultPart)"
+                }
+                .joined(separator: ", ")
+    } else {
+        initParameters = nil
+        functionParametersWithDefaultsString = ""
+    } -%>
+protocol <%= moduleName %>ModuleProvider {
+    <%_ if let params = initParameters { -%>
+    func create<%= moduleName %>Module(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.typeName %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>) -> <%= moduleName %>Module
+<%_ } else { -%>
+    func create<%= moduleName %>Module() -> <%= moduleName %>Module
+<%_ } -%>
+}
+extension <%= moduleName %>ModuleProvider {<%_ if let params = initParameters { -%>
+    @inline(__always)
+    func create<%= moduleName %>Module(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.typeName %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>) -> <%= moduleName %>Module {
+        AutoInject.get<%= moduleName %>Module(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.argumentLabel ?? param.name %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>)
+    }
+    @inline(__always)
+    func get<%= moduleName %>Module(<%= functionParametersWithDefaultsString %>) -> <%= moduleName %>Module {
+        create<%= moduleName %>Module(<%_for (index, param) in params.enumerated() { -%><%= param.argumentLabel ?? param.name %>: <%= param.argumentLabel ?? param.name %><% if index == params.count - 1 { %><% } else { %>, <% } %><%_ }-%>)
+    }
+<%_ } else { -%>
+    @inline(__always)
+    func create<%= moduleName %>Module() -> <%= moduleName %>Module {
+        AutoInject.get<%= moduleName %>Module()
+    }
+    @inline(__always)
+    func get<%= moduleName %>Module() -> <%= moduleName %>Module {
+        create<%= moduleName %>Module()
+    }
+<%_ } -%>
+}
+<%_ } -%>
+
+// MARK: - Factory Implementations
+<%_
+for factory in factories {
+-%><%= "public struct \(factory.name)Implementation: \(factory.name) {\n\tpublic init() {} \n}\n" %><%_
+}
+-%>

@@ -1,0 +1,115 @@
+// MARK: - AutoLenses
+import Foundation
+{% for type in types.based.AutoLenses|annotated:"AutoImport" %}
+{% for value in type.annotations.AutoImport|toArray %}
+import {{ value }}
+{% endfor %}
+{% endfor %}
+
+// swiftlint:disable line_length
+infix operator *>: MultiplicationPrecedence
+infix operator *~: MultiplicationPrecedence
+infix operator |>: AdditionPrecedence
+
+//Lenses API
+public struct Lens<Whole, Part> {
+    public let get: (Whole) -> Part
+    public let set: (Part, Whole) -> Whole
+}
+
+public func *> <A, B, C>(lhs: Lens<A, B>, rhs: Lens<B, C>) -> Lens<A, C> {
+    Lens<A, C>(
+        get: { a in rhs.get(lhs.get(a)) },
+        set: { (c, a) in lhs.set(rhs.set(c, lhs.get(a)), a) }
+    )
+}
+
+public func *> <A, B, C>(lhs: Lens<A, Optional<B>>, rhs: Lens<B, Optional<C>>) -> Lens<A, Optional<C>> {
+    Lens<A, Optional<C>>(
+        get: { a in lhs.get(a).flatMap { rhs.get($0) } },
+        set: { (c, a) in lhs.get(a).flatMap { lhs.set(rhs.set(c, $0), a) } ?? a }
+    )
+}
+
+public func *><A, B, C>(lhs: Lens<A, Optional<B>>, rhs: Lens<B, C>) -> Lens<A, Optional<C>> {
+    Lens<A, Optional<C>>(
+        get: { a in lhs.get(a).flatMap { rhs.get($0) } },
+        set: { (c, a) in
+            guard let b = lhs.get(a), let c = c else { return a }
+            return lhs.set(rhs.set(c, b), a)
+        }
+    )
+}
+
+public func *> <A, B, C>(lhs: BoundLens<A, B>, rhs: Lens<B, C>) -> BoundLens<A, C> {
+    BoundLens<A, C>(instance: lhs.instance, lens: lhs.lens *> rhs)
+}
+
+public func *> <A, B, C>(lhs: BoundLens<A, Optional<B>>, rhs: Lens<B, Optional<C>>) -> BoundLens<A, Optional<C>> {
+    BoundLens<A, Optional<C>>(instance: lhs.instance, lens: lhs.lens *> rhs)
+}
+
+public func *> <A, B, C>(lhs: BoundLens<A, Optional<B>>, rhs: Lens<B, C>) -> BoundLens<A, Optional<C>> {
+    BoundLens<A, Optional<C>>(instance: lhs.instance, lens: lhs.lens *> rhs)
+}
+
+public func *~ <A, B> (lhs: Lens<A, B>, rhs: B) -> (A) -> A {
+    { a in lhs.set(rhs, a) }
+}
+
+
+extension Lens {
+    public func modify(_ transform: @escaping (Part) -> Part) -> (Whole) -> Whole {
+        { whole in set(transform(get(whole)), whole) }
+    }
+}
+
+
+public func |> <A, B>(x: A, f: (A) -> B) -> B {
+    f(x)
+}
+
+public func |> <A, B, C>(f: @escaping (A) -> B, g: @escaping (B) -> C) -> (A) -> C {
+    { g(f($0)) }
+}
+
+// Bound lenses API
+public struct BoundLens<Whole, Part> {
+    public let instance: Whole
+    public let lens: Lens<Whole, Part>
+
+    public func get() -> Part {
+        return lens.get(instance)
+    }
+    public func set(_ newPart: Part) -> Whole {
+        return lens.set(newPart, instance)
+    }
+}
+
+{% for type in types.implementing.AutoLenses %}
+{% if type.annotations.fileGenerationPath %}
+// sourcery:file:{{ type.annotations.fileGenerationPath }}/{{ type.name}}+AutoLenses
+{% if type.annotations.AutoImport %}
+{% for value in type.annotations.AutoImport|toArray %}
+import {{ value }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{{ type.accessLevel }} extension {{ type.name }} {
+{% for variable in type.storedVariables|!computed|!static|!annotated:"skipLenses" where variable.readAccess != "private" and variable.readAccess != "fileprivate" and ( variable.isMutable or variable.defaultValue == nil ) %}
+  static let {{ variable.name }}Lens = Lens<{{type.name}}, {{variable.typeName}}>(
+    get: { $0.{{variable.name}} },
+    set: { {{variable.name}}, _value in
+       {{type.name}}({% for argument in type.storedVariables|!computed|!static|!annotated:"skipLenses" where argument.readAccess != "private" and argument.readAccess != "fileprivate" and ( argument.isMutable or argument.defaultValue == nil ) %}{{argument.name}}: {% if variable.name == argument.name %}{{variable.name}}{% else %}_value.{{argument.name}}{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %})
+    }
+  )
+  var {{ variable.name }}Lens: BoundLens<{{type.name}}, {{variable.typeName}}> {
+     return BoundLens<{{type.name}}, {{variable.typeName}}>(instance: self, lens: {{ type.name }}.{{ variable.name }}Lens)
+  }
+  
+  {% endfor %}
+}
+{% if type.annotations.fileGenerationPath %}
+// sourcery:end
+{% endif %}
+{% endfor %}

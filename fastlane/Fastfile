@@ -1,0 +1,60 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:ios)
+
+platform :ios do
+
+  desc "Create xcode project"
+  lane :generate_workspace do
+    # Carthage dependencies
+    # Retries carthage install in case of issues
+    begin
+      retries ||= 0
+      sh "carthage bootstrap --no-use-binaries --use-xcframeworks --platform ios --cache-builds --project-directory ../"  
+    rescue
+      retry if (retries += 1) < 10
+    end
+
+    # Create folders for generated code
+    private_create_generated_folders
+
+    # Generate project
+    sh "xcodegen generate --spec ../project.yml"
+
+    # Cocoapods dependencies  
+    cocoapods(try_repo_update_on_error: true)
+  end
+
+  lane :update_workspace do
+    # Generate project
+    sh "xcodegen generate --spec ../project.yml"
+
+    # Cocoapods dependencies  
+    cocoapods(try_repo_update_on_error: false)
+  end  
+
+  desc "Private: create `Generated` folders"
+  lane :private_create_generated_folders do
+    `mkdir -p ../ArchitecturePrototype/Sourcery/Generated`
+    sh "touch ../ArchitecturePrototype/Sourcery/Generated/AutoObjectDiff.generated.swift"
+    sh "touch ../ArchitecturePrototype/Sourcery/Generated/AutoLenses.generated.swift"
+    sh "touch ../ArchitecturePrototype/Sourcery/Generated/AutoInitializable.generated.swift"
+    sh "touch ../ArchitecturePrototype/Sourcery/Generated/AutoEquatable.generated.swift" 
+    sh "touch ../ArchitecturePrototype/Sourcery/Generated/AutoInjectable.generated.swift" 
+    sh "touch ../ArchitecturePrototype/Sourcery/Generated/AutoDatabaseMappable.generated.swift" 
+  end
+
+end

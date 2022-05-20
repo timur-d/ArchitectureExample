@@ -1,0 +1,26 @@
+PODS:
+  - Sourcery (1.6.1):
+    - Sourcery/CLI-Only (= 1.6.1)
+  - Sourcery/CLI-Only (1.6.1)
+  - SwiftGen (6.5.1)
+  - SwiftLint (0.46.2)
+
+DEPENDENCIES:
+  - Sourcery
+  - SwiftGen
+  - SwiftLint
+
+SPEC REPOS:
+  https://github.com/CocoaPods/Specs.git:
+    - Sourcery
+    - SwiftGen
+    - SwiftLint
+
+SPEC CHECKSUMS:
+  Sourcery: f3759f803bd0739f74fc92a4341eed0473ce61ac
+  SwiftGen: a6d22010845f08fe18fbdf3a07a8e380fd22e0ea
+  SwiftLint: 6bc52a21f0fd44cab9aa2dc8e534fb9f5e3ec507
+
+PODFILE CHECKSUM: db4a4f22a2b6301bc735007d62128e7310f6a48a
+
+COCOAPODS: 1.11.3

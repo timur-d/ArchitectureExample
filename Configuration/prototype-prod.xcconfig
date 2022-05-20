@@ -1,0 +1,3 @@
+#include "Pods/Target Support Files/Pods-ArchitecturePrototype/Pods-ArchitecturePrototype.prod.xcconfig"
+// App
+APP_BUNDLE_ID = com.prod.architecturePrototype

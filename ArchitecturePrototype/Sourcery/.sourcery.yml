@@ -1,0 +1,15 @@
+sources:
+  - SourceryProtocols.swift
+  - ../Core/Services/
+  - ../Core/ServicesInjection/
+  - ../Coordinators/
+  - ../Modules/
+templates:
+  - StencilTemplates/AutoEquatable.stencil
+  - StencilTemplates/AutoLenses.stencil
+  - StencilTemplates/AutoInitializable.stencil
+  - StencilTemplates/AutoObjectDiff.stencil
+  - StencilTemplates/AutoInjectable.swifttemplate
+  - StencilTemplates/AutoDatabaseMappable.stencil
+output:
+  Generated/
