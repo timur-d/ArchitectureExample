@@ -7,10 +7,12 @@ import Foundation
 
 public final class FirstModuleConfigurator: AutoInjectableModule {
     // MARK: - FirstModuleModuleOutput
-    public static func configure(input: Any? = nil,
+    public static func configure(databaseService: DatabaseServiceProtocol,
+                                 networkService: NetworkServiceProtocol,
                                  context: AnyFirstModuleContext,
                                  router: FirstModuleRouterInput) -> (FirstModuleViewType, FirstModuleModuleInput) {
-        let interactor = FirstModuleInteractor()
+        let interactor = FirstModuleInteractor(networkService: networkService,
+                                               databaseService: databaseService)
         let presenter = FirstModulePresenter(interactor: interactor, router: router)
         let view = FirstModuleViewController(output: presenter)
 

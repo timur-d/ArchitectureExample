@@ -2,6 +2,9 @@
 //  FirstModuleViewOutput.swift
 //
 
+import ReactiveSwift
+
+
 protocol FirstModuleViewOutput {
 
     /**
@@ -18,4 +21,8 @@ protocol FirstModuleViewOutput {
         View updates model from user interactions. Use notify=true carefully to avoid loop.
     */
     func update(with updates: [FirstModuleViewModel.Updates], notify: Bool)
+
+    var searchQueryProperty: MutableProperty<String?> { get }
+
+    var searchAction: Action<Void, Void, Never> { get }
 }

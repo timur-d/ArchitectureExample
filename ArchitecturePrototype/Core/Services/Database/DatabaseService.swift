@@ -15,6 +15,10 @@ public protocol DatabaseServiceProtocol {
     func fetchAndObserveNetworkModels() -> SignalProducer<[TestModel], Never>
 
     func updateTestModels() -> SignalProducer<[TestModel], Never>
+
+    func updateTestCollectionsModel(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never>
+
+    func fetchTestCollectionsModel(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never>
 }
 
 
@@ -91,11 +95,32 @@ public class DatabaseService: DatabaseServiceProtocol, AutoInjectableService {
                 self.db.save(models: models)
             })
     }
+
+    public func updateTestCollectionsModel(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never> {
+        self.networkService.loadTestCollectionsModelFromServer(byId: id)
+            .on(value: { [weak self] model in
+                guard let self = self, let model = model else { return }
+#warning("Conversion from  Protobuf > Db required here")
+#warning("DbService not good place to make a network request")
+                self.db.save(model: model)
+            })
+    }
+
+    public func fetchTestCollectionsModel(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never> {
+        .init { [weak self] observer, _ in
+            guard let self = self else { return observer.sendCompleted() }
+
+            let model: TestCollectionsModel? = self.db.syncFetchUnique(with: id)
+            observer.send(value: model)
+            observer.sendCompleted()
+        }
+    }
 }
 
 
 public protocol NetworkServiceProtocol {
     func loadTestModelsFromServer() -> SignalProducer<[TestModel], Never>
+    func loadTestCollectionsModelFromServer(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never>
 }
 
 
@@ -120,5 +145,60 @@ public class NetworkService: NetworkServiceProtocol, AutoInjectableService {
                       model: nil)
         })
         .delay(15.0, on: QueueScheduler.main)
+    }
+
+    public func loadTestCollectionsModelFromServer(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never> {
+        let firstArray = ["Some", "Any", "One", "Two"]
+        let secondArray = ["Green", "Red", "Blue", "Orange"]
+        let thirdArray = ["Apple", "Tomato", "Orange", "Banana"]
+
+        return SignalProducer { observer, _ in
+            if id == 404 {
+                observer.send(value: nil)
+                observer.sendCompleted()
+                return
+            }
+
+            let randomStrings = (0..<((10...100).randomElement() ?? 10)).map {
+                ["\($0)", firstArray.randomElement(), secondArray.randomElement(), thirdArray.randomElement()]
+                    .lazy
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+            }
+            let random2Strings = (0..<((10...100).randomElement() ?? 10)).map {
+                ["\($0)", firstArray.randomElement(), secondArray.randomElement(), thirdArray.randomElement()]
+                    .lazy
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+            }
+            let intValues: [Int64] = (0..<((10...100).randomElement() ?? 10))
+                .lazy
+                .map { (10...1000).randomElement() ?? $0 }
+                .map { Int64($0) }
+
+            let dateValues: [Date] = (0..<((10...100).randomElement() ?? 10))
+                .lazy
+                .compactMap { (10...1000).randomElement() ?? $0 }
+                .map { Double($0) }
+                .map { Date.init(timeIntervalSince1970: Date().timeIntervalSince1970 + $0) }
+
+            observer.send(value: .init(id: id,
+                                       strings: randomStrings,
+                                       intValues: intValues,
+                                       doubleValues: nil,
+                                       dates: dateValues,
+                                       codable: [],
+                                       persistable: [],
+                                       urls: [],
+                                       dict: [:],
+                                       anotherDict: [:],
+                                       set: [],
+                                       anotherSet: [],
+                                       someEnum: [],
+                                       someList: random2Strings,
+                                       codableEnums: []))
+            observer.sendCompleted()
+        }
+        .delay(5.0, on: QueueScheduler.main)
     }
 }

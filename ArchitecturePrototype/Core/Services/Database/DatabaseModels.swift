@@ -25,7 +25,7 @@ extension TestModel: UniquelyMappable {
     public static var idKey = \TestModel.id
 }
 
-struct TestCollectionsModel: AutoDatabaseMappable, Equatable {
+public struct TestCollectionsModel: AutoDatabaseMappable, Equatable {
     let id: Int
     let strings: [String]
     let intValues: [Int64?]
@@ -45,8 +45,8 @@ struct TestCollectionsModel: AutoDatabaseMappable, Equatable {
 
 
 extension TestCollectionsModel: UniquelyMappable {
-    typealias Container = TestCollectionsModelContainer
-    static var idKey = \TestCollectionsModel.id
+    public typealias Container = TestCollectionsModelContainer
+    public static var idKey = \TestCollectionsModel.id
 }
 
 
