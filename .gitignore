@@ -1,0 +1,7 @@
+/Carthage
+/Pods
+/fastlane/report.xml
+.*
+*.xcodeproj
+*.xcworkspace
+*.generated.swift
