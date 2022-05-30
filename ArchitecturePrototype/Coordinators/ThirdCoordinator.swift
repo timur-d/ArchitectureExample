@@ -39,4 +39,8 @@ final class ThirdCoordinator: BaseCoordinator, Coordinator, AutoInjectableCoordi
 }
 
 
-extension ThirdCoordinator: ThirdModuleRouterInput {}
+extension ThirdCoordinator: ThirdModuleRouterInput {
+    func showTestModel(withId id: Int) {
+        fatalError("Not implemented")
+    }
+}

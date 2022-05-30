@@ -1,4 +1,6 @@
 git "https://bitbucket.org/mmulyar/databaseobjectmapper.git" "550ba1b0a444986fd96082171fc44484fc2daee2"
 git "https://bitbucket.org/mmulyar/sectiondatasource.git" "0.13.7"
+github "ReactiveCocoa/ReactiveCocoa" "12.0.0"
+github "ReactiveCocoa/ReactiveSwift" "7.0.0"
 github "mikhailmulyar/DifferenceKit" "d4020e80248f41aff5c310ff6ee90b5875326d34"
 github "realm/realm-cocoa" "v10.25.2"

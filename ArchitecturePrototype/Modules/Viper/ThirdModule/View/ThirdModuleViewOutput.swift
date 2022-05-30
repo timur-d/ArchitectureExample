@@ -2,6 +2,7 @@
 //  ThirdModuleViewOutput.swift
 //
 
+import ReactiveSwift
 import UIKit
 
 protocol ThirdModuleViewOutput {
@@ -25,15 +26,22 @@ protocol ThirdModuleViewOutput {
     /**
         DataSource methods
     */
-    func itemsInSection(_ section: Int) -> [TestCollectionsModel]
+    func itemsInSection(_ section: Int) -> [TestModel]
 
-    func itemAtIndexPath(_ path: IndexPath) -> TestCollectionsModel
+    func itemAtIndexPath(_ path: IndexPath) -> TestModel
 
-    func indexPath(for item: TestCollectionsModel) -> IndexPath?
+    func indexPath(for item: TestModel) -> IndexPath?
 
     func numberOfItemsInSection(_ section: Int) -> Int
 
     func numberOfSections() -> Int
 
     func sectionIdForSection(_ section: Int) -> String
+
+    // Action's
+    var onItemSelectedAction: Action<Int, Void, Never> { get }
+
+    var clearDatabaseAction: Action<Void, Void, Never> { get }
+
+    var fillDatabaseAction: Action<Void, Void, Never> { get }
 }

@@ -15,7 +15,7 @@ final class SecondModulePresenter {
     private(set) var model: SecondModuleViewModel
 
 
-    private let dataSource: SimpleDataSource<TestCollectionsModel>
+    private let dataSource: SimpleDataSource<TestModel>
     init(interactor: SecondModuleInteractorInput, router: SecondModuleRouterInput) {
         self.interactor = interactor
         self.router = router
@@ -45,15 +45,15 @@ extension SecondModulePresenter: SecondModuleViewOutput {
         }
     }
 
-    func itemsInSection(_ section: Int) -> [TestCollectionsModel] {
+    func itemsInSection(_ section: Int) -> [TestModel] {
         self.dataSource.itemsInSection(section)
     }
 
-    func itemAtIndexPath(_ path: IndexPath) -> TestCollectionsModel {
+    func itemAtIndexPath(_ path: IndexPath) -> TestModel {
         self.dataSource.itemAtIndexPath(path)
     }
 
-    func indexPath(for item: TestCollectionsModel) -> IndexPath? {
+    func indexPath(for item: TestModel) -> IndexPath? {
         self.dataSource.indexPath(for: item)
     }
 
@@ -88,8 +88,6 @@ extension SecondModulePresenter: SectionDataSourceDelegate {
     }
 }
 
-extension TestCollectionsModel: Diffable {
-    public var differenceIdentifier: Int {
-        id
-    }
+extension TestModel: Diffable {
+    public var differenceIdentifier: Int { id }
 }

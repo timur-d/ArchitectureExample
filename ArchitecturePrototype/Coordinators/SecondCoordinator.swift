@@ -39,4 +39,8 @@ final class SecondCoordinator: BaseCoordinator, Coordinator, AutoInjectableCoord
 }
 
 
-extension SecondCoordinator: SecondModuleRouterInput {}
+extension SecondCoordinator: SecondModuleRouterInput {
+    func showTestModel(withId id: Int) {
+        fatalError("Not implemented")
+    }
+}

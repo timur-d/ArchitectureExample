@@ -25,11 +25,11 @@ protocol SecondModuleViewOutput {
     /**
         DataSource methods
     */
-    func itemsInSection(_ section: Int) -> [TestCollectionsModel]
+    func itemsInSection(_ section: Int) -> [TestModel]
 
-    func itemAtIndexPath(_ path: IndexPath) -> TestCollectionsModel
+    func itemAtIndexPath(_ path: IndexPath) -> TestModel
 
-    func indexPath(for item: TestCollectionsModel) -> IndexPath?
+    func indexPath(for item: TestModel) -> IndexPath?
 
     func numberOfItemsInSection(_ section: Int) -> Int
 

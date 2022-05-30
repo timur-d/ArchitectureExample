@@ -89,6 +89,8 @@ targets:
       - framework: "Carthage/Build/Realm.xcframework"
       - framework: "Carthage/Build/RealmSwift.xcframework"  
       - framework: "Carthage/Build/DatabaseObjectsMapper.xcframework"
+      - framework: "Carthage/Build/ReactiveSwift.xcframework"
+      - framework: "Carthage/Build/ReactiveCocoa.xcframework"
 
     preBuildScripts:
     postBuildScripts:

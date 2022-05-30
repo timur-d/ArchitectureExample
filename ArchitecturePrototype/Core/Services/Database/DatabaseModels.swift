@@ -12,7 +12,7 @@ func testFunc() {
     let model = TestModel(id: 90, string: "5", model: nil)
 }
 
-struct TestModel: AutoDatabaseMappable, Equatable {
+public struct TestModel: AutoDatabaseMappable, Equatable {
     let id: Int
     let string: String
 
@@ -21,8 +21,8 @@ struct TestModel: AutoDatabaseMappable, Equatable {
 }
 
 extension TestModel: UniquelyMappable {
-    typealias Container = TestModelContainer
-    static var idKey = \TestModel.id
+    public typealias Container = TestModelContainer
+    public static var idKey = \TestModel.id
 }
 
 struct TestCollectionsModel: AutoDatabaseMappable, Equatable {
