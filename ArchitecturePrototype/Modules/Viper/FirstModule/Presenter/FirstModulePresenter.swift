@@ -54,13 +54,13 @@ extension FirstModulePresenter: FirstModuleViewOutput {
 
         let fetchProducer = self.interactor.fetchCollectionsModel(byId: id)
             .on(value: { [weak self] value in
-                guard let self = self else { return }
-
-                self.update(with: [.searchInProgress(value == nil)], notify: true)
+                self?.update(with: [.searchInProgress(value == nil)],
+                             notify: true)
             })
         let updateProducer = self.interactor.updateCollectionsModel(byId: id)
-            .on(terminated: {
-                self.update(with: [.searchInProgress(false)], notify: true)
+            .on(terminated: { [weak self] in
+                self?.update(with: [.searchInProgress(false)],
+                             notify: true)
             })
 
         let concatProducer = fetchProducer.concat(updateProducer)
@@ -74,18 +74,24 @@ extension FirstModulePresenter: FirstModuleViewOutput {
             .startWithValues { [weak self] value in
                 guard let self = self else { return }
 
-                guard let value = value else {
-                    return self.update(with: [.idString("\(id)"),
-                                              .idsString(nil),
-                                              .stringsString("Not found"),
-                                              .datesString(nil)], notify: true)
+                var updates = [FirstModuleViewModel.Updates]()
+                updates.append(.idString("Id: \(id)"))
+
+                defer {
+                    self.update(with: updates,
+                                notify: true)
                 }
 
-                self.update(with: [.idString("\(id)"),
-                                   .idsString("Ints: \(value.intValues.lazy.map { "\($0 ?? 0) "}.joined(separator: ", "))"),
-                                   .stringsString("Strings: \(value.strings.joined(separator: ", "))"),
-                                   .datesString("Dates: \(value.dates?.lazy.map { $0.description }.joined(separator: ", ") ?? "none")")],
-                            notify: true)
+                guard let value = value else {
+                    updates.append(contentsOf: [.idsString(nil),
+                                                .stringsString("Not found"),
+                                                .datesString(nil)])
+                    return
+                }
+
+                updates.append(contentsOf: [.idsString("Ints: \(value.intValues.lazy.map { "\($0 ?? 0) "}.joined(separator: ", "))"),
+                                            .stringsString("Strings: \(value.strings.joined(separator: ", "))"),
+                                            .datesString("Dates: \(value.dates?.lazy.map { $0.description }.joined(separator: ", ") ?? "none")")])
             }
 
     }
