@@ -9,7 +9,10 @@ import UIKit
 final class ThirdContext: AnyThirdModuleContext {}
 
 
-protocol ThirdCoordinatorFactory: AutoFactoryImplementation, ThirdModuleModuleProvider, FirstCoordinatorProvider {}
+protocol ThirdCoordinatorFactory: AutoFactoryImplementation,
+                                  ThirdModuleModuleProvider,
+                                  FirstCoordinatorProvider,
+                                  DetailedTestModelCoordinatorProvider {}
 
 
 final class ThirdCoordinator: BaseCoordinator, Coordinator, AutoInjectableCoordinator {
@@ -38,9 +41,9 @@ final class ThirdCoordinator: BaseCoordinator, Coordinator, AutoInjectableCoordi
     }
 }
 
-
-extension ThirdCoordinator: ThirdModuleRouterInput {
-    func showTestModel(withId id: Int) {
-        fatalError("Not implemented")
-    }
+extension ThirdCoordinator: ShowDetailedTestModelCoordinatorExtension {
+    // *extension constraint
+    var detailedTestModelCoordinatorProvider: DetailedTestModelCoordinatorProvider { factory }
 }
+
+extension ThirdCoordinator: ThirdModuleRouterInput {}

@@ -16,6 +16,8 @@ public protocol DatabaseServiceProtocol {
 
     func updateTestModels() -> SignalProducer<[TestModel], Never>
 
+    func fetchObserveAndUpdateTestModel(byId id: Int) -> SignalProducer<TestModel?, Never>
+
     func updateTestCollectionsModel(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never>
 
     func fetchTestCollectionsModel(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never>
@@ -86,6 +88,31 @@ public class DatabaseService: DatabaseServiceProtocol, AutoInjectableService {
         }
     }
 
+    public func fetchObserveAndUpdateTestModel(byId id: Int) -> SignalProducer<TestModel?, Never> {
+        .init { [weak self] observer, lifetime in
+            guard let self = self else { return observer.sendCompleted() }
+
+            lifetime += self.networkService.loadTestModelFromServer(byId: id)
+                .startWithValues { [weak self] model in
+                    guard let self = self else { return observer.sendCompleted() }
+                    #warning("deleted state not handled")
+                    guard let model = model else { return }
+
+                    self.db.save(model: model)
+                }
+
+            let token = self.db.fetch({ $0.id == id }, limit: 1, callback: { (models: [TestModel]) in
+                observer.send(value: models.first)
+            }, updates: {updates in
+                observer.send(value: updates.values.first)
+            })
+
+            lifetime.observeEnded {
+                token.invalidate()
+            }
+        }
+    }
+
     public func updateTestModels() -> SignalProducer<[TestModel], Never> {
         self.networkService.loadTestModelsFromServer()
             .on(value: { [weak self] models in
@@ -119,6 +146,7 @@ public class DatabaseService: DatabaseServiceProtocol, AutoInjectableService {
 
 
 public protocol NetworkServiceProtocol {
+    func loadTestModelFromServer(byId id: Int) -> SignalProducer<TestModel?, Never>
     func loadTestModelsFromServer() -> SignalProducer<[TestModel], Never>
     func loadTestCollectionsModelFromServer(byId id: Int) -> SignalProducer<TestCollectionsModel?, Never>
 }
@@ -144,6 +172,22 @@ public class NetworkService: NetworkServiceProtocol, AutoInjectableService {
                 .joined(separator: " "),
                       model: nil)
         })
+        .delay(15.0, on: QueueScheduler.main)
+    }
+
+    public func loadTestModelFromServer(byId id: Int) -> SignalProducer<TestModel?, Never> {
+        let firstArray = ["Some", "Any", "One", "Two"]
+        let secondArray = ["Green", "Red", "Blue", "Orange"]
+        let thirdArray = ["Apple", "Tomato", "Orange", "Banana"]
+
+        return .init(value: TestModel(id: id,
+                                      string: [firstArray.randomElement(),
+                                               secondArray.randomElement(),
+                                               thirdArray.randomElement(),
+                                               "\(id)", "nwCreated"].lazy
+            .compactMap { $0 }
+            .joined(separator: " "),
+                                      model: nil))
         .delay(15.0, on: QueueScheduler.main)
     }
 
